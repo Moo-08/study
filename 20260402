@@ -1,0 +1,29 @@
+// 1부터 100까지의 랜덤 숫자를 생성하고, 사용자가 같은 숫자를 입력할 때 까지 루프가 반복되는 프로그램
+
+import java.util.Scanner;
+import java.util.Random;
+
+public class Day20260402 {
+    public static void main(String[] args) {
+        Random random = new Random();
+        int ran = random.nextInt(100) + 1; //랜덤숫자가 저장되는 변수
+        System.out.println(ran);
+
+        System.out.println("[숫자 맞추기 게임] 1부터 100까지의 숫자를 입력해주세요.");
+
+
+        while (true) {
+            Scanner in = new Scanner(System.in);
+            int num = in.nextInt(); //입력숫자가 저장되는 변수
+
+            if (ran > num){
+                System.out.println("더 큰 숫자를 입력하세요.");
+            }else if(ran < num){
+                System.out.println("더 작은 숫자를 입력하세요.");
+            }else{
+                System.out.println("정답!!!! 퀴즈를 종료합니다.");
+                break;
+            }
+        }
+    }
+}
