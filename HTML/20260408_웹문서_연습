@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="kor">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <h1>물 마시는 법</h1>
+  <hr>
+    <h2>1. 생수로 마시기</h2>
+      <p>- 생수 뚜껑을 연다.<br> - 입으로 가져가서 기울여서 마신다.</p>
+    <h2>2. 컵으로 마시기</h1>
+      <p>- 컵에 물을 받는다<br> - 컵을 들어 기울여서 입에 대고 마신다.</p>
+      
+</body>
+</html>
