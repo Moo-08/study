@@ -53,13 +53,16 @@
   .image-item .toolbar button{background:transparent;border:none;color:#fff;font-size:18px;width:36px;height:34px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .image-item .toolbar button:hover{background:rgba(255,255,255,.15);}
   .image-item .toolbar button.del:hover{background:rgba(239,68,68,.6);}
-  .group-wrap{display:flex;align-items:stretch;gap:0;border:2px solid var(--accent);border-radius:12px;padding:5px;background:rgba(59,130,246,.06);position:relative;}
-  .group-wrap .image-item{border-radius:7px;}
+  .group-wrap{display:flex;align-items:stretch;gap:0;border:2px solid var(--accent);border-radius:12px;padding:5px;background:rgba(59,130,246,.06);position:relative;cursor:grab;touch-action:none;}
+  .group-wrap:active{cursor:grabbing;}
+  .group-wrap.dragging{opacity:.3;transform:scale(.95);}
+  .group-wrap.drag-over{border-color:var(--success);transform:scale(1.02);box-shadow:0 0 20px rgba(59,130,246,.4);}
+  .group-wrap .image-item{border-radius:7px;cursor:default;}
   .group-wrap .group-label{position:absolute;top:-10px;left:10px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 8px;border-radius:4px;z-index:1;}
-  .bond-btn{display:flex;align-items:center;justify-content:center;width:34px;min-width:34px;height:auto;align-self:center;cursor:pointer;border:2px dashed var(--border);background:var(--surface);border-radius:8px;font-size:20px;font-weight:700;color:var(--text2);transition:all .2s;flex-shrink:0;padding:10px 0;}
+  .bond-btn{display:flex;align-items:center;justify-content:center;width:44px;min-width:44px;height:auto;align-self:center;cursor:pointer;border:2px dashed var(--border);background:var(--surface);border-radius:10px;font-size:26px;font-weight:700;color:var(--text2);transition:all .2s;flex-shrink:0;padding:14px 0;}
   .bond-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.08);}
-  .unbond-btn{display:flex;align-items:center;justify-content:center;width:26px;min-width:26px;align-self:center;cursor:pointer;border:none;background:transparent;border-radius:5px;font-size:16px;color:var(--danger);transition:all .2s;flex-shrink:0;padding:6px 0;opacity:.5;}
-  .unbond-btn:hover{opacity:1;background:rgba(239,68,68,.1);}
+  .unbond-btn{display:flex;align-items:center;justify-content:center;width:32px;min-width:32px;align-self:center;cursor:pointer;border:none;background:rgba(239,68,68,.1);border-radius:6px;font-size:20px;color:var(--danger);transition:all .2s;flex-shrink:0;padding:8px 0;opacity:.7;}
+  .unbond-btn:hover{opacity:1;background:rgba(239,68,68,.2);}
   .caption-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit;outline:none;}
   .caption-input:focus{border-color:var(--accent);}
   .caption-input::placeholder{color:var(--text2);}
@@ -128,7 +131,7 @@
     .upload-zone .big-icon{font-size:36px;}
     .image-item{width:calc(50% - 28px);}
     .group-wrap{padding:4px;gap:0;}
-    .bond-btn{width:30px;min-width:30px;font-size:18px;padding:8px 0;}
+    .bond-btn{width:40px;min-width:40px;font-size:24px;padding:12px 0;}
     .btn{width:100%;justify-content:center;padding:14px 20px;font-size:15px;}
     .actions{flex-direction:column;}
     .btn-sm{width:auto;}
@@ -224,6 +227,7 @@
     <div class="actions" style="margin-top:20px;">
       <button class="btn btn-secondary" id="prevBtn3">← 설정</button>
       <button class="btn btn-primary" id="saveBtn">💾 PDF 저장</button>
+      <button class="btn btn-primary" id="shareBtn" style="background:#FEE500;color:#3C1E1E;">💬 카톡 공유</button>
     </div>
   </div>
 </div>
@@ -235,8 +239,6 @@ let images = [];
 let orientation = 'landscape';
 let marginMM = 0;
 let coverEnabled = false;
-let dragIdx = null;
-let touchDragIdx = null;
 let touchClone = null;
 let bondPairs = new Set(); // "id1:id2" bonds
 
@@ -342,29 +344,37 @@ function renderImages() {
 
   groups.forEach((group, gi) => {
     const isMulti = group.length > 1;
+    let dragEl;
 
     if (isMulti) {
       const wrap = document.createElement('div');
       wrap.className = 'group-wrap';
+      wrap.draggable = true;
+      wrap.dataset.gi = gi;
       const label = document.createElement('div');
       label.className = 'group-label';
       label.textContent = '그룹';
       wrap.appendChild(label);
 
       group.forEach((imgIdx, j) => {
-        wrap.appendChild(makeImgDiv(imgIdx));
+        const item = makeImgDiv(imgIdx, false); // not individually draggable
+        wrap.appendChild(item);
         if (j < group.length - 1) {
           const ub = document.createElement('button');
           ub.className = 'unbond-btn';
           ub.innerHTML = '✕';
           ub.title = '그룹 해제';
-          ub.addEventListener('click', () => { removeBond(imgIdx); renderImages(); });
+          ub.addEventListener('click', e => { e.stopPropagation(); removeBond(imgIdx); renderImages(); });
           wrap.appendChild(ub);
         }
       });
+      addGroupDrag(wrap, gi, groups);
       imageList.appendChild(wrap);
     } else {
-      imageList.appendChild(makeImgDiv(group[0]));
+      const item = makeImgDiv(group[0], true);
+      item.dataset.gi = gi;
+      addGroupDrag(item, gi, groups);
+      imageList.appendChild(item);
     }
 
     // '+' button between groups
@@ -401,11 +411,96 @@ function renderImages() {
   clearBtn.classList.toggle('hidden', n===0);
 }
 
-function makeImgDiv(i) {
+// Group-level drag (desktop + touch)
+let dragGI = null;
+let touchDragGI = null;
+
+function addGroupDrag(el, gi, groups) {
+  // Desktop
+  el.addEventListener('dragstart', e => {
+    dragGI = gi;
+    el.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragGI = null; });
+  el.addEventListener('dragover', e => { e.preventDefault(); if (dragGI !== null && dragGI !== gi) el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drag-over');
+    if (dragGI === null || dragGI === gi) return;
+    moveGroup(dragGI, gi);
+    dragGI = null;
+  });
+
+  // Touch
+  el.addEventListener('touchstart', e => {
+    if (e.target.closest('.toolbar') || e.target.closest('.unbond-btn')) return;
+    touchDragGI = gi;
+    const t = e.touches[0], r = el.getBoundingClientRect();
+    touchClone = el.cloneNode(true);
+    touchClone.style.cssText = `position:fixed;z-index:9999;width:${r.width}px;height:${r.height}px;opacity:.75;pointer-events:none;left:${t.clientX-r.width/2}px;top:${t.clientY-r.height/2}px;`;
+    document.body.appendChild(touchClone);
+    el.classList.add('dragging');
+  }, {passive:false});
+
+  el.addEventListener('touchmove', e => {
+    if (touchDragGI === null) return;
+    e.preventDefault();
+    if (touchClone) {
+      const t = e.touches[0];
+      touchClone.style.left = (t.clientX - touchClone.offsetWidth/2) + 'px';
+      touchClone.style.top = (t.clientY - touchClone.offsetHeight/2) + 'px';
+    }
+    document.querySelectorAll('.image-item,.group-wrap').forEach(x => x.classList.remove('drag-over'));
+    const t = e.touches[0];
+    const target = document.elementFromPoint(t.clientX, t.clientY);
+    const dropEl = target?.closest?.('.group-wrap') || target?.closest?.('.image-item[data-gi]');
+    if (dropEl && parseInt(dropEl.dataset.gi) !== touchDragGI) dropEl.classList.add('drag-over');
+  }, {passive:false});
+
+  el.addEventListener('touchend', e => {
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+    document.querySelectorAll('.image-item,.group-wrap').forEach(x => { x.classList.remove('dragging','drag-over'); });
+    if (touchDragGI === null) return;
+    const t = e.changedTouches[0];
+    const target = document.elementFromPoint(t.clientX, t.clientY);
+    const dropEl = target?.closest?.('.group-wrap') || target?.closest?.('.image-item[data-gi]');
+    if (dropEl) {
+      const targetGI = parseInt(dropEl.dataset.gi);
+      if (touchDragGI !== targetGI) moveGroup(touchDragGI, targetGI);
+    }
+    touchDragGI = null;
+  });
+}
+
+function moveGroup(fromGI, toGI) {
+  const groups = getGroups();
+  const srcGroup = groups[fromGI];
+  const srcImgs = srcGroup.map(i => images[i]);
+  // Remove source images (from highest index first)
+  const sortedSrc = [...srcGroup].sort((a,b) => b-a);
+  sortedSrc.forEach(i => images.splice(i, 1));
+  // Recalculate target insert position
+  const groupsAfter = getGroups();
+  const adjustedToGI = toGI > fromGI ? toGI - 1 : toGI;
+  let insertIdx = 0;
+  if (adjustedToGI >= 0 && adjustedToGI < groupsAfter.length) {
+    insertIdx = groupsAfter[adjustedToGI][0];
+  }
+  // Insert source images at target
+  images.splice(insertIdx, 0, ...srcImgs);
+  // Rebuild bonds for the moved group
+  for (let k = 0; k < srcImgs.length - 1; k++) {
+    bondPairs.add(srcImgs[k].id + ':' + srcImgs[k+1].id);
+  }
+  renderImages();
+}
+
+function makeImgDiv(i, isDraggable) {
   const img = images[i];
   const div = document.createElement('div');
   div.className = 'image-item';
-  div.draggable = true;
+  div.draggable = isDraggable;
   div.dataset.idx = i;
   const rot = img.rotation ? `transform:rotate(${img.rotation}deg)` : '';
   div.innerHTML = `<img src="${img.dataUrl}" style="${rot}"><div class="badge">${i+1}</div>
@@ -414,46 +509,7 @@ function makeImgDiv(i) {
       <button title="오른쪽 회전" onclick="rotImg(${i},90)">↻</button>
       <button class="del" title="삭제" onclick="delImg(${i})">✕</button>
     </div>`;
-  div.addEventListener('dragstart', () => { dragIdx=i; div.classList.add('dragging'); });
-  div.addEventListener('dragend', () => { div.classList.remove('dragging'); dragIdx=null; });
-  div.addEventListener('dragover', e => { e.preventDefault(); div.classList.add('drag-over'); });
-  div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
-  div.addEventListener('drop', e => {
-    e.preventDefault(); div.classList.remove('drag-over');
-    if (dragIdx===null||dragIdx===i) return;
-    const m=images.splice(dragIdx,1)[0]; images.splice(i,0,m); dragIdx=null; renderImages();
-  });
-  div.addEventListener('touchstart', tsStart, {passive:false});
-  div.addEventListener('touchmove', tsMove, {passive:false});
-  div.addEventListener('touchend', tsEnd);
   return div;
-}
-
-// Touch drag
-function tsStart(e) {
-  const item=e.currentTarget; touchDragIdx=parseInt(item.dataset.idx);
-  const t=e.touches[0], r=item.getBoundingClientRect();
-  touchClone=item.cloneNode(true);
-  touchClone.style.cssText=`position:fixed;z-index:9999;width:${r.width}px;height:${r.height}px;opacity:.75;pointer-events:none;left:${t.clientX-r.width/2}px;top:${t.clientY-r.height/2}px;`;
-  document.body.appendChild(touchClone);
-  item.classList.add('dragging');
-}
-function tsMove(e) {
-  e.preventDefault();
-  if (touchClone) { const t=e.touches[0]; touchClone.style.left=(t.clientX-touchClone.offsetWidth/2)+'px'; touchClone.style.top=(t.clientY-touchClone.offsetHeight/2)+'px'; }
-  document.querySelectorAll('.image-item').forEach(el => el.classList.remove('drag-over'));
-  const t=e.touches[0], target=document.elementFromPoint(t.clientX,t.clientY)?.closest?.('.image-item');
-  if (target && parseInt(target.dataset.idx)!==touchDragIdx) target.classList.add('drag-over');
-}
-function tsEnd(e) {
-  if (touchClone) { touchClone.remove(); touchClone=null; }
-  document.querySelectorAll('.image-item').forEach(el => { el.classList.remove('dragging','drag-over'); });
-  const t=e.changedTouches[0], target=document.elementFromPoint(t.clientX,t.clientY)?.closest?.('.image-item');
-  if (target) {
-    const ti=parseInt(target.dataset.idx);
-    if (touchDragIdx!==null && touchDragIdx!==ti) { const m=images.splice(touchDragIdx,1)[0]; images.splice(ti,0,m); renderImages(); }
-  }
-  touchDragIdx=null;
 }
 
 window.rotImg = (i,d) => { images[i].rotation=(images[i].rotation+d+360)%360; renderImages(); };
@@ -560,40 +616,68 @@ function coverHTML() {
   </div>`;
 }
 
-// PDF
+// PDF generation (reusable)
+async function generatePDF() {
+  const ori=orientation==='landscape'?'l':'p';
+  const pdf=new jsPDF(ori,'mm','a4');
+  const pw=orientation==='landscape'?297:210, ph=orientation==='landscape'?210:297;
+  const m=marginMM, uw=pw-m*2, uh=ph-m*2, gap=m>0?2:0;
+  const pages=buildPages();
+  const capH=5;
+
+  for (let pi=0;pi<pages.length;pi++) {
+    if(pi>0) pdf.addPage();
+    const pg=pages[pi];
+    if (pg.type==='cover') { renderCoverPDF(pdf,pw,ph); continue; }
+    const lo=pg.layout, imgs=pg.images;
+    if (lo===1) {
+      if(imgs[0]) { const ch=imgs[0].caption?capH:0; await addImg(pdf,imgs[0],m,m,uw,uh-ch); if(imgs[0].caption) drawCap(pdf,imgs[0].caption,m,m+uh-ch,uw,ch); }
+    } else if (lo===2) {
+      const cellH=(uh-gap)/2;
+      for(let i=0;i<imgs.length;i++) { const ch=imgs[i].caption?capH:0; const y=m+i*(cellH+gap); await addImg(pdf,imgs[i],m,y,uw,cellH-ch); if(imgs[i].caption) drawCap(pdf,imgs[i].caption,m,y+cellH-ch,uw,ch); }
+    } else if (lo===4) {
+      const cw=(uw-gap)/2, ch2=(uh-gap)/2;
+      for(let i=0;i<imgs.length;i++) { const r=Math.floor(i/2),c=i%2; const cc=imgs[i].caption?capH:0; const x=m+c*(cw+gap),y=m+r*(ch2+gap); await addImg(pdf,imgs[i],x,y,cw,ch2-cc); if(imgs[i].caption) drawCap(pdf,imgs[i].caption,x,y+ch2-cc,cw,cc); }
+    } else if (lo===6) {
+      const cw=(uw-gap)/2, ch3=(uh-gap*2)/3;
+      for(let i=0;i<imgs.length;i++) { const r=Math.floor(i/2),c=i%2; const cc=imgs[i].caption?capH:0; const x=m+c*(cw+gap),y=m+r*(ch3+gap); await addImg(pdf,imgs[i],x,y,cw,ch3-cc); if(imgs[i].caption) drawCap(pdf,imgs[i].caption,x,y+ch3-cc,cw,cc); }
+    }
+  }
+  return pdf;
+}
+
+// PDF 저장
 $('saveBtn').addEventListener('click', async () => {
   const btn=$('saveBtn'); btn.disabled=true; btn.textContent='⏳ 생성 중...';
   try {
-    const ori=orientation==='landscape'?'l':'p';
-    const pdf=new jsPDF(ori,'mm','a4');
-    const pw=orientation==='landscape'?297:210, ph=orientation==='landscape'?210:297;
-    const m=marginMM, uw=pw-m*2, uh=ph-m*2, gap=m>0?2:0;
-    const pages=buildPages();
-    const capH=5;
-
-    for (let pi=0;pi<pages.length;pi++) {
-      if(pi>0) pdf.addPage();
-      const pg=pages[pi];
-
-      if (pg.type==='cover') { renderCoverPDF(pdf,pw,ph); continue; }
-
-      const lo=pg.layout, imgs=pg.images;
-      if (lo===1) {
-        if(imgs[0]) { const ch=imgs[0].caption?capH:0; await addImg(pdf,imgs[0],m,m,uw,uh-ch); if(imgs[0].caption) drawCap(pdf,imgs[0].caption,m,m+uh-ch,uw,ch); }
-      } else if (lo===2) {
-        const cellH=(uh-gap)/2;
-        for(let i=0;i<imgs.length;i++) { const ch=imgs[i].caption?capH:0; const y=m+i*(cellH+gap); await addImg(pdf,imgs[i],m,y,uw,cellH-ch); if(imgs[i].caption) drawCap(pdf,imgs[i].caption,m,y+cellH-ch,uw,ch); }
-      } else if (lo===4) {
-        const cw=(uw-gap)/2, ch2=(uh-gap)/2;
-        for(let i=0;i<imgs.length;i++) { const r=Math.floor(i/2),c=i%2; const cc=imgs[i].caption?capH:0; const x=m+c*(cw+gap),y=m+r*(ch2+gap); await addImg(pdf,imgs[i],x,y,cw,ch2-cc); if(imgs[i].caption) drawCap(pdf,imgs[i].caption,x,y+ch2-cc,cw,cc); }
-      } else if (lo===6) {
-        const cw=(uw-gap)/2, ch3=(uh-gap*2)/3;
-        for(let i=0;i<imgs.length;i++) { const r=Math.floor(i/2),c=i%2; const cc=imgs[i].caption?capH:0; const x=m+c*(cw+gap),y=m+r*(ch3+gap); await addImg(pdf,imgs[i],x,y,cw,ch3-cc); if(imgs[i].caption) drawCap(pdf,imgs[i].caption,x,y+ch3-cc,cw,cc); }
-      }
-    }
-    pdf.save('부동산_자료.pdf');
+    const pdf = await generatePDF();
+    pdf.save('이미지_통합기.pdf');
   } catch(e) { alert('오류: '+e.message); }
   btn.disabled=false; btn.textContent='💾 PDF 저장';
+});
+
+// 카톡 공유
+$('shareBtn').addEventListener('click', async () => {
+  const btn=$('shareBtn'); btn.disabled=true; btn.textContent='⏳ 생성 중...';
+  try {
+    const pdf = await generatePDF();
+    const blob = pdf.output('blob');
+    const file = new File([blob], '이미지_통합기.pdf', {type:'application/pdf'});
+
+    if (navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+      await navigator.share({
+        title: '이미지 통합기',
+        files: [file]
+      });
+    } else {
+      // 공유 API 미지원 시 다운로드 후 안내
+      pdf.save('이미지_통합기.pdf');
+      alert('이 브라우저에서는 직접 공유가 안 됩니다.\nPDF가 다운로드되었으니 카톡에서 직접 첨부해주세요.');
+    }
+  } catch(e) {
+    if (e.name !== 'AbortError') alert('오류: '+e.message);
+  }
+  btn.disabled=false; btn.textContent='💬 카톡 공유';
 });
 
 function drawCap(pdf,text,x,y,w,h) {
