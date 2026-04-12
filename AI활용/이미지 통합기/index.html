@@ -179,6 +179,10 @@
   <!-- Step 2 -->
   <div class="panel" id="panel2">
     <div class="opt-group">
+      <div class="opt-label">파일명</div>
+      <input id="fileName" class="caption-input" style="font-size:14px;padding:10px 12px;" placeholder="파일명을 입력하세요" value="">
+    </div>
+    <div class="opt-group">
       <div class="cover-toggle">
         <div class="toggle-sw" id="coverToggle"></div>
         <span style="font-size:13px;font-weight:700;">표지 페이지</span>
@@ -646,12 +650,17 @@ async function generatePDF() {
   return pdf;
 }
 
+function getFileName() {
+  const name = $('fileName').value.trim();
+  return (name || '문서') + '.pdf';
+}
+
 // PDF 저장
 $('saveBtn').addEventListener('click', async () => {
   const btn=$('saveBtn'); btn.disabled=true; btn.textContent='⏳ 생성 중...';
   try {
     const pdf = await generatePDF();
-    pdf.save('이미지_통합기.pdf');
+    pdf.save(getFileName());
   } catch(e) { alert('오류: '+e.message); }
   btn.disabled=false; btn.textContent='💾 PDF 저장';
 });
@@ -661,17 +670,17 @@ $('shareBtn').addEventListener('click', async () => {
   const btn=$('shareBtn'); btn.disabled=true; btn.textContent='⏳ 생성 중...';
   try {
     const pdf = await generatePDF();
+    const fname = getFileName();
     const blob = pdf.output('blob');
-    const file = new File([blob], '이미지_통합기.pdf', {type:'application/pdf'});
+    const file = new File([blob], fname, {type:'application/pdf'});
 
     if (navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
       await navigator.share({
-        title: '이미지 통합기',
+        title: fname.replace('.pdf',''),
         files: [file]
       });
     } else {
-      // 공유 API 미지원 시 다운로드 후 안내
-      pdf.save('이미지_통합기.pdf');
+      pdf.save(fname);
       alert('이 브라우저에서는 직접 공유가 안 됩니다.\nPDF가 다운로드되었으니 카톡에서 직접 첨부해주세요.');
     }
   } catch(e) {
