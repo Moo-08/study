@@ -1,9 +1,9 @@
-const CACHE_NAME = 'pdf-builder-v4';
+const CACHE_NAME = 'pdf-builder-v5';
 const URLS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  './jspdf.umd.min.js',
   'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap'
 ];
 
